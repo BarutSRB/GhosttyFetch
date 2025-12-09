@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const types = @import("src/types.zig");
 const config = @import("src/config.zig");
 const frames = @import("src/frames.zig");
@@ -10,19 +11,53 @@ const resize = @import("src/resize.zig");
 const Allocator = types.Allocator;
 const clear_screen = types.clear_screen;
 const config_file = types.config_file;
+const posix = std.posix;
+
+// Global state for signal handler
+var global_term_mode: ?*shell.TerminalMode = null;
+
+fn signalHandler(_: c_int) callconv(.c) void {
+    // Restore terminal mode if active
+    if (global_term_mode) |tm| {
+        tm.restore();
+    }
+    // Exit immediately
+    std.process.exit(130); // 128 + SIGINT(2)
+}
+
+fn installSignalHandlers() void {
+    const act = posix.Sigaction{
+        .handler = .{ .handler = signalHandler },
+        .mask = posix.sigemptyset(),
+        .flags = 0,
+    };
+    posix.sigaction(posix.SIG.INT, &act, null);
+    posix.sigaction(posix.SIG.TERM, &act, null);
+}
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
+    defer {
+        const check = gpa.deinit();
+        if (check == .leak) {
+            std.debug.print("Warning: Memory leak detected\n", .{});
+        }
+    }
     const allocator = gpa.allocator();
 
     var exit_status: ?u8 = null;
     defer if (exit_status) |code| std.process.exit(code);
 
     const stdout_file = std.fs.File.stdout();
+    const stdin_file = std.fs.File.stdin();
+
+    // Check if running interactively (stdin is a TTY)
+    const is_interactive = stdin_file.isTty();
+
     const cfg = config.loadConfig(allocator) catch |err| {
         if (err == error.MissingConfig) {
-            std.debug.print("Config file '{s}' is required. Please create it next to play_animation.zig.\n", .{config_file});
+            std.debug.print("Config file '{s}' not found.\n", .{config_file});
+            std.debug.print("Searched in: ~/.config/ghosttyfetch/, /usr/share/ghosttyfetch/, and next to executable.\n", .{});
         }
         return err;
     };
@@ -71,9 +106,17 @@ pub fn main() !void {
     var input_buffer = std.ArrayList(u8).empty;
     defer input_buffer.deinit(allocator);
 
-    const stdin_file = std.fs.File.stdin();
-    var term_mode = try shell.TerminalMode.enable(stdin_file);
-    defer term_mode.restore();
+    // Only enable raw mode if running interactively
+    var term_mode: ?shell.TerminalMode = null;
+    if (is_interactive) {
+        term_mode = try shell.TerminalMode.enable(stdin_file);
+        global_term_mode = &term_mode.?;
+        installSignalHandlers();
+    }
+    defer if (term_mode) |*tm| {
+        tm.restore();
+        global_term_mode = null;
+    };
 
     var submitted_command: ?[]u8 = null;
     defer if (submitted_command) |cmd| allocator.free(cmd);
@@ -84,7 +127,7 @@ pub fn main() !void {
     while (keep_running) {
         frame_index = 0;
         while (frame_index < frame_cache.frameCount()) : (frame_index += 1) {
-            if (submitted_command == null) {
+            if (is_interactive and submitted_command == null) {
                 submitted_command = try shell.captureInput(allocator, stdin_file, &input_buffer);
             }
 
@@ -104,6 +147,12 @@ pub fn main() !void {
             try stdout_file.writeAll(with_prompt);
 
             if (submitted_command != null) {
+                keep_running = false;
+                break;
+            }
+
+            // Non-interactive mode: just show one full animation cycle and exit
+            if (!is_interactive and frame_index + 1 >= frame_cache.frameCount()) {
                 keep_running = false;
                 break;
             }
@@ -137,7 +186,11 @@ pub fn main() !void {
         }
     }
 
-    term_mode.restore();
+    // Restore terminal before running command
+    if (term_mode) |*tm| {
+        tm.restore();
+        global_term_mode = null;
+    }
 
     if (submitted_command) |cmd| {
         const command = std.mem.trim(u8, cmd, " \t\r\n");

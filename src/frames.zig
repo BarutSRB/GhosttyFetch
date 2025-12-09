@@ -1,5 +1,6 @@
 const std = @import("std");
 const types = @import("types.zig");
+const paths = @import("paths.zig");
 
 const Allocator = types.Allocator;
 const ColorPreferences = types.ColorPreferences;
@@ -712,81 +713,80 @@ fn scaleFrame(
 }
 
 pub fn normalizePanelWidth(width: usize) usize {
-    if (width == 0) return min_info_panel_width;
-    return if (width < min_info_panel_width) min_info_panel_width else width;
+    // Return width as-is; the new calculateLayout already handles proportions.
+    // For ultra-narrow terminals with info_width=0, callers should check for 0
+    // and skip info panel rendering entirely.
+    return width;
 }
 
 pub fn calculateLayout(term_size: TerminalSize) LayoutDimensions {
-    // Determine desired info width based on terminal size
-    const desired_info_width: usize = blk: {
-        if (term_size.width >= 140) break :blk 80;
-        if (term_size.width >= 100) break :blk 60;
-        if (term_size.width >= 80) break :blk 40;
-        break :blk @min(40, @as(usize, term_size.width) / 2);
-    };
+    const total_width: usize = @as(usize, term_size.width);
+    const gap_width: usize = if (total_width >= 100) 8 else if (total_width >= 50) 4 else 2;
 
-    // Apply minimum width enforcement (same logic as normalizePanelWidth)
-    const actual_info_width = normalizePanelWidth(desired_info_width);
+    // Ultra-narrow terminals: art only, no info panel
+    if (total_width < 30) {
+        return .{
+            .art_width = total_width,
+            .art_height = calculateArtHeight(term_size.height),
+            .info_width = 0,
+        };
+    }
 
-    // Calculate art width accounting for actual info width and gap
-    // Use adaptive gap: 8 chars for large terminals, 4 for smaller ones
-    const gap_width: usize = if (term_size.width >= 100) 8 else 4;
-    const reserved_for_info = actual_info_width + gap_width;
+    // Calculate proportional widths that fit within terminal
+    const available_for_panels = total_width -| gap_width;
 
-    const art_width: usize = if (term_size.width > reserved_for_info)
-        @as(usize, term_size.width) - reserved_for_info
-    else
-        // Fallback for very small terminals: ensure minimum viable art size
-        @max(20, @as(usize, term_size.width) / 3);
+    // Target proportions based on terminal size
+    var art_width: usize = undefined;
+    var info_width: usize = undefined;
 
-    const reserved_lines: usize = 3;
-    const art_height: usize = if (term_size.height > reserved_lines + 10)
-        @as(usize, term_size.height) - reserved_lines
-    else
-        @max(10, @as(usize, term_size.height) - reserved_lines);
+    if (total_width >= 140) {
+        // Large terminal: generous info panel
+        info_width = @min(80, available_for_panels / 3);
+        art_width = available_for_panels -| info_width;
+    } else if (total_width >= 100) {
+        // Medium-large: balanced
+        info_width = @min(60, available_for_panels * 2 / 5);
+        art_width = available_for_panels -| info_width;
+    } else if (total_width >= 60) {
+        // Medium: 60% art, 40% info
+        art_width = (available_for_panels * 3) / 5;
+        info_width = available_for_panels -| art_width;
+    } else {
+        // Small: prioritize art, minimal info
+        art_width = (available_for_panels * 2) / 3;
+        info_width = available_for_panels -| art_width;
+    }
+
+    // Apply minimum thresholds only if space allows
+    const min_art: usize = 15;
+    const min_info: usize = 20;
+
+    // If info panel is too small to be useful, give space to art
+    if (info_width < min_info and art_width + info_width >= min_art) {
+        art_width = available_for_panels;
+        info_width = 0;
+    }
+    // If art is too small, try to take from info
+    else if (art_width < min_art and info_width > min_info) {
+        const transfer = @min(min_art -| art_width, info_width -| min_info);
+        art_width += transfer;
+        info_width -= transfer;
+    }
 
     return .{
         .art_width = art_width,
-        .art_height = art_height,
-        .info_width = actual_info_width,
+        .art_height = calculateArtHeight(term_size.height),
+        .info_width = info_width,
     };
 }
 
-pub fn scaleFramesForLayout(
-    allocator: Allocator,
-    original_frames: []const []const u8,
-    target_width: usize,
-    target_height: usize,
-) ![]const []const u8 {
-    var scaled = std.ArrayList([]const u8).empty;
-    errdefer {
-        for (scaled.items) |frame| allocator.free(frame);
-        scaled.deinit(allocator);
+fn calculateArtHeight(term_height: u16) usize {
+    const height: usize = @as(usize, term_height);
+    const reserved_lines: usize = 3;
+    if (height > reserved_lines + 10) {
+        return height - reserved_lines;
     }
-
-    for (original_frames) |frame| {
-        const scaled_frame = try scaleFrame(
-            allocator,
-            frame,
-            target_width,
-            target_height,
-        );
-        try scaled.append(allocator, scaled_frame);
-    }
-
-    return try scaled.toOwnedSlice(allocator);
-}
-
-pub fn maxFrameVisibleWidth(_: Allocator, frames: []const []const u8) !usize {
-    var max: usize = 0;
-    for (frames) |frame| {
-        var it = std.mem.splitScalar(u8, frame, '\n');
-        while (it.next()) |line| {
-            const w = visibleWidth(line);
-            if (w > max) max = w;
-        }
-    }
-    return max;
+    return @max(10, height -| reserved_lines);
 }
 
 pub fn fpsToDelayNs(fps: f64) u64 {
@@ -853,22 +853,6 @@ pub fn renderFrame(allocator: Allocator, frame: []const u8, prefs: ColorPreferen
     }
 
     return try out.toOwnedSlice(allocator);
-}
-
-pub fn renderFrames(
-    allocator: Allocator,
-    raw_frames: []const []const u8,
-    prefs: ColorPreferences,
-) ![]const []const u8 {
-    var rendered = std.ArrayList([]const u8).empty;
-    errdefer freeFrames(allocator, rendered.items);
-
-    for (raw_frames, 0..) |frame, idx| {
-        const rendered_frame = try renderFrame(allocator, frame, prefs, idx);
-        try rendered.append(allocator, rendered_frame);
-    }
-
-    return try rendered.toOwnedSlice(allocator);
 }
 
 fn detectArtRange(lines: []const []const u8) ArtRange {
@@ -971,9 +955,10 @@ pub fn freeFrames(allocator: Allocator, frames: []const []const u8) void {
 }
 
 fn animationPath(allocator: Allocator) ![]u8 {
-    const src_dir = std.fs.path.dirname(@src().file) orelse ".";
-    // Go up one level from src/ to project root and load the single animation file
-    return try std.fs.path.join(allocator, &.{ src_dir, "..", data_file });
+    if (try paths.findDataFile(allocator, data_file)) |result| {
+        return result.path;
+    }
+    return error.AnimationNotFound;
 }
 
 pub fn visibleWidth(text: []const u8) usize {

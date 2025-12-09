@@ -23,6 +23,10 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
+    // Install data files to share directory for system-wide installs
+    b.installFile("config.json", "share/ghosttyfetch/config.json");
+    b.installFile("animation.json", "share/ghosttyfetch/animation.json");
+
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_cmd.addArgs(args);

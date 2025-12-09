@@ -241,29 +241,6 @@ pub fn getProcessInfo(allocator: Allocator, pid: i32) !ProcessInfo {
     };
 }
 
-/// Get current process's parent PID
-pub fn getParentPid() !i32 {
-    const pid: i32 = @intCast(std.c.getpid());
-    var path_buf: [64]u8 = undefined;
-
-    const stat_path = try std.fmt.bufPrint(&path_buf, "/proc/{d}/stat", .{pid});
-    var buffer: [512]u8 = undefined;
-    const file = try std.fs.openFileAbsolute(stat_path, .{});
-    defer file.close();
-
-    const bytes_read = try file.read(&buffer);
-    const content = buffer[0..bytes_read];
-
-    const paren_end = std.mem.lastIndexOfScalar(u8, content, ')') orelse return error.ParseError;
-    const after_comm = content[paren_end + 2 ..];
-
-    var fields = std.mem.splitScalar(u8, after_comm, ' ');
-    _ = fields.next(); // state
-    const ppid_str = fields.next() orelse return error.ParseError;
-
-    return try std.fmt.parseInt(i32, ppid_str, 10);
-}
-
 /// Get hostname from /proc/sys/kernel/hostname
 pub fn getHostname(allocator: Allocator) ![]u8 {
     return readSysFile(allocator, "/proc/sys/kernel/hostname");
@@ -275,25 +252,6 @@ pub fn getUsername(allocator: Allocator) ![]u8 {
         return try allocator.dupe(u8, "unknown");
     };
     return user;
-}
-
-/// Count directories in a path (for package counting)
-pub fn countDirectories(path: []const u8) !u32 {
-    var count: u32 = 0;
-
-    var dir = std.fs.openDirAbsolute(path, .{ .iterate = true }) catch {
-        return 0;
-    };
-    defer dir.close();
-
-    var iter = dir.iterate();
-    while (try iter.next()) |entry| {
-        if (entry.kind == .directory) {
-            count += 1;
-        }
-    }
-
-    return count;
 }
 
 /// Count lines matching a pattern in a file (for dpkg status)
@@ -312,11 +270,4 @@ pub fn countLinesMatching(allocator: Allocator, path: []const u8, pattern: []con
     }
 
     return count;
-}
-
-/// Read a file from /sys/class path
-pub fn readSysClass(allocator: Allocator, class: []const u8, device: []const u8, attr: []const u8) ![]u8 {
-    var path_buf: [256]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buf, "/sys/class/{s}/{s}/{s}", .{ class, device, attr });
-    return readSysFile(allocator, path);
 }

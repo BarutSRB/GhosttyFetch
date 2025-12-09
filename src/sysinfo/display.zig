@@ -98,8 +98,9 @@ fn getDisplayFromDRM(allocator: Allocator) !?[]const u8 {
 }
 
 fn getDisplayFromXrandr(allocator: Allocator) !?[]const u8 {
-    // Check if X11 is running
-    _ = std.process.getEnvVarOwned(allocator, "DISPLAY") catch return null;
+    // Check if X11 is running (non-allocating check)
+    const has_display = std.process.hasEnvVar(allocator, "DISPLAY") catch return null;
+    if (!has_display) return null;
 
     // Run xrandr and parse output
     var child = std.process.Child.init(&.{ "xrandr", "--current" }, allocator);

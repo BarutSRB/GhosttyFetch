@@ -56,17 +56,6 @@ fn promptPrefixInternal(allocator: Allocator, prefs: ColorPreferences) ![]const 
     return try defaultPromptPrefix(allocator, pieces, colors);
 }
 
-fn buildPromptHint(allocator: Allocator, colors: InfoColors) ![]const u8 {
-    var line = std.ArrayList(u8).empty;
-    errdefer line.deinit(allocator);
-
-    if (colors.muted.len > 0) try line.appendSlice(allocator, colors.muted);
-    try line.appendSlice(allocator, "Type a command and press Enter to run it");
-    if (colors.reset.len > 0) try line.appendSlice(allocator, colors.reset);
-
-    return try line.toOwnedSlice(allocator);
-}
-
 pub fn renderPromptLine(allocator: Allocator, prefix: []const u8, input: []const u8, colors: InfoColors) ![]const u8 {
     var line = std.ArrayList(u8).empty;
     errdefer line.deinit(allocator);

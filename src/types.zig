@@ -11,8 +11,6 @@ pub const clear_screen = "\x1b[H\x1b[2J";
 pub const data_file = "animation.json";
 pub const config_file = "config.json";
 pub const default_rgb = [_]u8{ 53, 81, 243 };
-pub const info_column_width: usize = 80;
-pub const shell_version_limit: usize = 8 * 1024;
 pub const max_command_length: usize = 2048;
 pub const min_info_panel_width: usize = 44;
 

@@ -78,14 +78,6 @@ fn getPackagesLinux(allocator: Allocator) !?[]const u8 {
         try parts.append(allocator, pacman_str);
     }
 
-    // Fedora/RHEL (rpm)
-    // Try counting from rpm database
-    const rpm_count = countRpmPackages();
-    if (rpm_count > 0) {
-        const rpm_str = try std.fmt.allocPrint(allocator, "{d} (rpm)", .{rpm_count});
-        try parts.append(allocator, rpm_str);
-    }
-
     // Flatpak
     const flatpak_count = countDirectories("/var/lib/flatpak/app");
     if (flatpak_count > 0) {
@@ -98,13 +90,6 @@ fn getPackagesLinux(allocator: Allocator) !?[]const u8 {
     if (snap_count > 0) {
         const snap_str = try std.fmt.allocPrint(allocator, "{d} (snap)", .{snap_count});
         try parts.append(allocator, snap_str);
-    }
-
-    // Nix
-    const nix_count = countNixPackages();
-    if (nix_count > 0) {
-        const nix_str = try std.fmt.allocPrint(allocator, "{d} (nix)", .{nix_count});
-        try parts.append(allocator, nix_str);
     }
 
     if (parts.items.len == 0) return null;
@@ -128,18 +113,6 @@ fn countDirectories(path: []const u8) u32 {
     return count;
 }
 
-fn countRpmPackages() u32 {
-    // Try to count from /var/lib/rpm/
-    // This is a simplified approach - rpm database is complex
-    var dir = std.fs.openDirAbsolute("/var/lib/rpm", .{ .iterate = true }) catch return 0;
-    defer dir.close();
-
-    // If the directory exists, assume RPM is available
-    // For accurate count, we'd need to parse the RPM database
-    // For now, return 0 to skip (run `rpm -qa | wc -l` would be more accurate but requires exec)
-    return 0;
-}
-
 fn countSnapPackages() u32 {
     var count: u32 = 0;
 
@@ -160,20 +133,4 @@ fn countSnapPackages() u32 {
     }
 
     return count;
-}
-
-fn countNixPackages() u32 {
-    // Count user profile packages
-    const home = std.process.getEnvVarOwned(std.heap.page_allocator, "HOME") catch return 0;
-    defer std.heap.page_allocator.free(home);
-
-    var path_buf: [512]u8 = undefined;
-    const nix_path = std.fmt.bufPrint(&path_buf, "{s}/.nix-profile/manifest.nix", .{home}) catch return 0;
-
-    // If manifest exists, nix is in use
-    std.fs.accessAbsolute(nix_path, .{}) catch return 0;
-
-    // For accurate count, we'd need to parse the manifest
-    // For now, return 0 to skip
-    return 0;
 }

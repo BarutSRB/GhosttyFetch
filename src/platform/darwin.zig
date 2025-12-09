@@ -79,18 +79,6 @@ pub fn sysctlString(allocator: Allocator, name: [:0]const u8) ![]u8 {
     return buffer[0..end];
 }
 
-/// Read an i64 value from sysctl by name
-pub fn sysctlInt(name: [:0]const u8) !i64 {
-    var value: i64 = 0;
-    var size: usize = @sizeOf(i64);
-
-    if (c.sysctlbyname(name.ptr, &value, &size, null, 0) != 0) {
-        return error.SysctlFailed;
-    }
-
-    return value;
-}
-
 /// Read a u64 value from sysctl by name
 pub fn sysctlU64(name: [:0]const u8) !u64 {
     var value: u64 = 0;
@@ -198,45 +186,6 @@ pub fn getProcessInfo(pid: i32) !ProcessInfo {
     result.name_len = copy_len;
 
     return result;
-}
-
-/// Get the current process's parent PID
-pub fn getParentPid() !i32 {
-    const pid = std.c.getpid();
-    const info = try getProcessInfo(pid);
-    return info.ppid;
-}
-
-/// Walk process tree and find process by name pattern
-pub fn findParentProcessByName(_: Allocator, names: []const []const u8) !?ProcessInfo {
-    var current_pid = std.c.getpid();
-
-    // Walk up the process tree (max 50 levels to prevent infinite loops)
-    var iterations: u32 = 0;
-    while (iterations < 50) : (iterations += 1) {
-        const info = getProcessInfo(current_pid) catch break;
-
-        const proc_name = info.name[0..info.name_len];
-        for (names) |target| {
-            if (std.ascii.eqlIgnoreCase(proc_name, target)) {
-                return info;
-            }
-        }
-
-        // Move to parent
-        if (info.ppid <= 1) break;
-        current_pid = info.ppid;
-    }
-
-    return null;
-}
-
-/// Read a file and return its contents (for plist parsing, etc.)
-pub fn readFile(allocator: Allocator, path: []const u8) ![]u8 {
-    const file = try std.fs.openFileAbsolute(path, .{});
-    defer file.close();
-
-    return try file.readToEndAlloc(allocator, 1024 * 1024); // 1MB max
 }
 
 /// Get the hostname

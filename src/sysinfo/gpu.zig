@@ -29,13 +29,8 @@ fn getGPUDarwin(allocator: Allocator) !?[]const u8 {
 }
 
 fn getGPULinux(allocator: Allocator) !?[]const u8 {
-    // Try DRM subsystem first
+    // Try DRM subsystem
     if (try getGPUFromDRM(allocator)) |gpu| {
-        return gpu;
-    }
-
-    // Try lspci output parsing (requires lspci)
-    if (try getGPUFromPCI(allocator)) |gpu| {
         return gpu;
     }
 
@@ -86,12 +81,5 @@ fn mapPCIToGPUName(vendor: []const u8, device: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, vendor, "0x1002")) return "AMD GPU";
     if (std.mem.eql(u8, vendor, "0x8086")) return "Intel GPU";
 
-    return null;
-}
-
-fn getGPUFromPCI(allocator: Allocator) !?[]const u8 {
-    // This would require parsing lspci output or /proc/bus/pci
-    // For now, return null as this is complex
-    _ = allocator;
     return null;
 }

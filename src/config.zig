@@ -1,5 +1,6 @@
 const std = @import("std");
 const types = @import("types.zig");
+const paths = @import("paths.zig");
 
 const Allocator = types.Allocator;
 const Config = types.Config;
@@ -88,13 +89,15 @@ fn dupDefaultSysInfoModules(allocator: Allocator) ![]const []const u8 {
 
 fn dupStringSlice(allocator: Allocator, values: []const []const u8) ![]const []const u8 {
     const out = try allocator.alloc([]const u8, values.len);
+    var initialized: usize = 0;
     errdefer {
-        for (out) |item| allocator.free(item);
-        if (out.len > 0) allocator.free(out);
+        for (out[0..initialized]) |item| allocator.free(item);
+        allocator.free(out);
     }
 
-    for (values, 0..) |value, idx| {
-        out[idx] = try allocator.dupe(u8, value);
+    for (values) |value| {
+        out[initialized] = try allocator.dupe(u8, value);
+        initialized += 1;
     }
 
     return out;
@@ -110,9 +113,10 @@ fn freeStringSliceOwned(allocator: Allocator, items: []const []const u8) void {
 }
 
 fn configPath(allocator: Allocator) ![]u8 {
-    const src_dir = std.fs.path.dirname(@src().file) orelse ".";
-    // Go up one level from src/ to project root
-    return try std.fs.path.join(allocator, &.{ src_dir, "..", config_file });
+    if (try paths.findDataFile(allocator, config_file)) |result| {
+        return result.path;
+    }
+    return error.MissingConfig;
 }
 
 pub fn colorPreferences(allocator: Allocator, config: Config, is_tty: bool, fps: f64) !ColorPreferences {
