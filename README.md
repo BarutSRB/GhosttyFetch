@@ -48,7 +48,7 @@ It's ideal for adding visual flair to your terminal while providing quick access
 Before installation, ensure you have:
 
 - **Operating System:** macOS or Linux (POSIX-compliant systems)
-- **Zig:** Version 0.15.2 or compatible
+- **Zig:** Version 0.15.x required (tested with 0.15.2). Not compatible with 0.16.0+ due to API changes.
 - **System utilities (optional):** Some modules call platform tools if present (e.g., `xrandr` for X11 display info, `gsettings` on GNOME).
 
 ## Installation
