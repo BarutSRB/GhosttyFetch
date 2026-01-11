@@ -99,6 +99,7 @@ pub const Config = struct {
     white_gradient_scroll: ?bool = null,
     white_gradient_scroll_speed: ?f64 = null,
     sysinfo: SysInfoConfig = .{},
+    match_info_height: ?bool = null,
 };
 
 pub const default_sysinfo_modules = [_][]const u8{
@@ -117,4 +118,10 @@ pub const LayoutDimensions = struct {
     art_width: usize,
     art_height: usize,
     info_width: usize,
+
+    pub fn constrainToAspectRatio(self: *LayoutDimensions, original_width: usize, original_height: usize) void {
+        if (original_height == 0) return;
+        const max_width = (self.art_height * original_width) / original_height;
+        self.art_width = @min(self.art_width, max_width);
+    }
 };

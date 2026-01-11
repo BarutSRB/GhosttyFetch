@@ -1002,6 +1002,18 @@ pub fn frameVisibleWidth(frame: []const u8) usize {
     return max;
 }
 
+pub fn getFrameDimensions(frame: []const u8) struct { width: usize, height: usize } {
+    var height: usize = 0;
+    var max_width: usize = 0;
+    var it = std.mem.splitScalar(u8, frame, '\n');
+    while (it.next()) |line| {
+        height += 1;
+        const w = visibleWidth(line);
+        if (w > max_width) max_width = w;
+    }
+    return .{ .width = max_width, .height = height };
+}
+
 /// Lazy frame cache that scales and renders frames on-demand.
 /// This provides instant resize response by deferring frame processing
 /// until each frame is actually needed for display.

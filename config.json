@@ -50,5 +50,6 @@
     "#78b8ff"
   ],
   "white_gradient_scroll": true,
-  "white_gradient_scroll_speed": 20
+  "white_gradient_scroll_speed": 20,
+  "match_info_height": true
 }

@@ -80,7 +80,16 @@ pub fn main() !void {
     const raw_frames = try frames.loadRawFrames(allocator);
     defer frames.freeFrames(allocator, raw_frames);
 
-    // Use lazy frame cache for instant resize response
+    const orig_dims = frames.getFrameDimensions(raw_frames[0]);
+
+    var styled_info = try ui.stylizeInfoLines(allocator, sysinfo_lines, layout.info_width, prefs);
+    defer sysinfo.freeSystemInfoLines(allocator, styled_info);
+
+    if (cfg.match_info_height orelse false) {
+        layout.art_height = @max(10, styled_info.len);
+        layout.constrainToAspectRatio(orig_dims.width, orig_dims.height);
+    }
+
     var frame_cache = try frames.LazyFrameCache.init(
         allocator,
         raw_frames,
@@ -89,9 +98,6 @@ pub fn main() !void {
         prefs,
     );
     defer frame_cache.deinit();
-
-    var styled_info = try ui.stylizeInfoLines(allocator, sysinfo_lines, layout.info_width, prefs);
-    defer sysinfo.freeSystemInfoLines(allocator, styled_info);
 
     // Get first frame to calculate initial width
     const first_frame = try frame_cache.getFrame(0);
@@ -158,18 +164,20 @@ pub fn main() !void {
             }
 
             if (resize.checkAndClear()) {
-                // Re-detect terminal size and calculate new layout
                 const new_term_size = types.TerminalSize.detect(stdout_file) catch
                     types.TerminalSize{ .width = 120, .height = 40 };
-                const new_layout = frames.calculateLayout(new_term_size);
+                var new_layout = frames.calculateLayout(new_term_size);
 
-                // Instant: just invalidate cache and set new dimensions
-                frame_cache.resize(new_layout.art_width, new_layout.art_height);
-
-                // Re-style info panel (this is fast - only ~10-20 lines)
                 const new_styled = try ui.stylizeInfoLines(allocator, sysinfo_lines, new_layout.info_width, prefs);
                 sysinfo.freeSystemInfoLines(allocator, styled_info);
                 styled_info = new_styled;
+
+                if (cfg.match_info_height orelse false) {
+                    new_layout.art_height = @max(10, styled_info.len);
+                    new_layout.constrainToAspectRatio(orig_dims.width, orig_dims.height);
+                }
+
+                frame_cache.resize(new_layout.art_width, new_layout.art_height);
 
                 term_size = new_term_size;
                 layout = new_layout;

@@ -49,6 +49,7 @@ pub fn loadConfig(allocator: Allocator) !Config {
         white_gradient_scroll: ?bool = null,
         white_gradient_scroll_speed: ?f64 = null,
         sysinfo: ?RawSysInfo = null,
+        match_info_height: ?bool = null,
     };
 
     const parsed = try std.json.parseFromSlice(RawConfig, allocator, raw, .{ .ignore_unknown_fields = true });
@@ -66,6 +67,7 @@ pub fn loadConfig(allocator: Allocator) !Config {
     }
     if (parsed.value.white_gradient_scroll) |scroll| config.white_gradient_scroll = scroll;
     if (parsed.value.white_gradient_scroll_speed) |speed| config.white_gradient_scroll_speed = speed;
+    if (parsed.value.match_info_height) |v| config.match_info_height = v;
     if (parsed.value.sysinfo) |si| {
         if (si.enabled) |v| config.sysinfo.enabled = v;
         if (si.modules) |mods| {
