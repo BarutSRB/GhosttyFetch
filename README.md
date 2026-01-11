@@ -61,13 +61,13 @@ git clone https://github.com/BarutSRB/GhosttyFetch.git
 cd GhosttyFetch
 
 # Build the application
-zig build-exe ghosttyfetch.zig
+zig build
 
 # For optimized build
-zig build-exe -O ReleaseFast ghosttyfetch.zig
+zig build -Doptimize=ReleaseFast
 
 # Run (must be in directory with config.json and animation.json)
-./ghosttyfetch
+./zig-out/bin/ghosttyfetch
 ```
 
 ### File Structure
@@ -300,7 +300,7 @@ Contributions are welcome! We appreciate bug fixes, new features, documentation 
 1. Fork the repository: `https://github.com/BarutSRB/GhosttyFetch`
 2. Create a feature branch: `git checkout -b feature/your-feature`
 3. Make your changes
-4. Test thoroughly: `zig build-exe ghosttyfetch.zig && ./ghosttyfetch`
+4. Test thoroughly: `zig build && ./zig-out/bin/ghosttyfetch`
 5. Submit a pull request with a clear description
 
 **Contribution Ideas:**
