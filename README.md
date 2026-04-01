@@ -1,5 +1,8 @@
 # GhosttyFetch
 
+## WARNING: Ghosttyfetch has a prompt injection that can be abused and a few repos were discovered that presented themselves as forks but were malicious. Please either compile it yourself from this repo the official one, or if enough people want I can make a macos homebrew and Arch AUR, I'll do it or someone with a reputation in open source, but do not blindly pull a fork of Ghosttyfetch without reviewing it's code as prompt injection is used by Ghosttyfetch for good but can easily be manipulated for harm withotu any skill required by them (scriptty kids)!!!
+
+
 <p align="center">
   <img src="demo.png" alt="GhosttyFetch Demo">
 </p>
